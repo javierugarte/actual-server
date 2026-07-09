@@ -1,6 +1,6 @@
 # actual-server
 
-Backend API-first para registrar usuarios, asociar tokens APNs de iOS, consultar fuentes externas cada mañana y notificar novedades.
+Backend API-first para registrar usuarios, asociar tokens APNs de iOS, sincronizar cuentas de Actual Budget cada mañana y detectar movimientos nuevos.
 
 ## Stack
 
@@ -28,7 +28,7 @@ API docs: `http://localhost:3000/docs`
 
 ## Persistencia y cola
 
-- SQLite guarda usuarios, tokens de dispositivos, fuentes, items vistos, ejecuciones y notificaciones. Por defecto usa `SQLITE_PATH=./data/actual-server.db`.
+- SQLite guarda usuarios, tokens de dispositivos, cuentas Actual configuradas, movimientos vistos, movimientos nuevos y notificaciones. Por defecto usa `SQLITE_PATH=./data/actual-server.db`.
 - El scheduler se ejecuta en proceso con `node-cron`; no requiere servicios locales adicionales.
 - `npm run db:setup` es idempotente: aplica [db/schema.sql](./db/schema.sql) con `CREATE TABLE IF NOT EXISTS`.
 
@@ -36,34 +36,85 @@ API docs: `http://localhost:3000/docs`
 
 1. `POST /auth/register`
 2. `POST /devices` con el token APNs que entrega iOS
-3. `POST /sources` para asociar una URL al usuario
-4. El scheduler crea un job diario según `FETCH_CRON`
-5. El proceso de scheduler llama por `POST` a `DATA_SERVICE_URL`, detecta items nuevos y envía push si `PUSH_DRY_RUN=false`
+3. `POST /actual-accounts` para registrar una cuenta Actual Budget concreta
+4. El scheduler ejecuta la sincronización diaria según `FETCH_CRON`
+5. Para cada cuenta activa llama a bank sync y después descarga movimientos
+6. Los movimientos que no existían antes quedan disponibles en `GET /actual-transactions/new`
 
-## Servicio externo
+## Actual Budget
 
-El proceso de scheduler no llama directamente a la URL de cada fuente. Llama a un único servicio configurado por entorno:
+Registrar una cuenta Actual para el usuario autenticado:
 
-```env
-DATA_SERVICE_URL=https://api.example.com/updates
+```http
+POST /api/actual-accounts
+Authorization: Bearer <token>
+Content-Type: application/json
 ```
-
-Body enviado:
 
 ```json
 {
-  "userId": "user-id",
-  "userSourceId": "subscription-id",
-  "sourceId": "source-id",
-  "sourceUrl": "https://example.com/feed.json",
-  "label": "Example feed",
-  "lastFetchedAt": "2026-07-09T08:00:00.000Z",
-  "itemKeyPath": "id",
-  "titlePath": "title"
+  "name": "Cuenta corriente",
+  "baseUrl": "https://actual.example.com/v1",
+  "apiKey": "actual-api-key",
+  "budgetSyncId": "budget-sync-id",
+  "accountId": "actual-account-id",
+  "budgetEncryptionPassword": "optional"
 }
 ```
 
-La respuesta puede ser un array o un objeto con `items`, `data` o `results`.
+La respuesta no devuelve secretos: `apiKey` y `budgetEncryptionPassword` salen como `redacted`.
+
+Endpoints usados contra Actual:
+
+- `POST /budgets/{budgetSyncId}/accounts/{accountId}/banksync`
+- `GET /budgets/{budgetSyncId}/accounts/{accountId}/transactions`
+
+Headers:
+
+- `x-api-key: <apiKey>`
+- `budget-encryption-password: <password>` cuando aplique
+
+El listado de movimientos usa:
+
+```env
+ACTUAL_TRANSACTIONS_SINCE_DATE=1900-01-01
+ACTUAL_TRANSACTIONS_PAGE_LIMIT=100
+```
+
+La primera sincronización de una cuenta se usa como baseline y no marca todos los movimientos como nuevos. En sincronizaciones posteriores, los movimientos desconocidos quedan expuestos en `GET /actual-transactions/new`.
+
+## Jobs
+
+Lanzar sincronización manual de todas las cuentas activas:
+
+```http
+POST /api/jobs/run-now
+x-admin-api-key: <ADMIN_API_KEY>
+Content-Type: application/json
+
+{}
+```
+
+Lanzar sincronización manual de una cuenta configurada:
+
+```json
+{
+  "actualAccountId": "local-actual-account-id"
+}
+```
+
+Consultar movimientos nuevos:
+
+```http
+GET /api/actual-transactions/new?limit=100
+Authorization: Bearer <token>
+```
+
+Filtros opcionales:
+
+- `actualAccountId`
+- `limit`, máximo 500
+- `includeAcknowledged=true`
 
 ## APNs
 

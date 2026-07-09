@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleDestroy } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import cron, { ScheduledTask } from "node-cron";
-import { SourceFetcherService } from "./source-fetcher.service";
+import { ActualSyncService } from "../actual-sync/actual-sync.service";
 
 @Injectable()
 export class JobsSchedulerService implements OnModuleDestroy {
@@ -9,7 +9,7 @@ export class JobsSchedulerService implements OnModuleDestroy {
   private task?: ScheduledTask;
 
   constructor(
-    private readonly fetcher: SourceFetcherService,
+    private readonly actualSync: ActualSyncService,
     private readonly config: ConfigService
   ) {}
 
@@ -25,7 +25,7 @@ export class JobsSchedulerService implements OnModuleDestroy {
       pattern,
       async () => {
         try {
-          await this.fetcher.fetchAll();
+          await this.actualSync.syncAllActiveAccounts();
         } catch (error) {
           const message = error instanceof Error ? error.message : "Unknown scheduler error";
           this.logger.error(`Scheduled fetch failed: ${message}`);
@@ -34,7 +34,7 @@ export class JobsSchedulerService implements OnModuleDestroy {
       { timezone: tz }
     );
 
-    this.logger.log(`Scheduled source fetch with cron "${pattern}" (${tz})`);
+    this.logger.log(`Scheduled Actual account sync with cron "${pattern}" (${tz})`);
   }
 
   onModuleDestroy() {

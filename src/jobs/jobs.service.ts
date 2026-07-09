@@ -1,15 +1,15 @@
 import { Injectable } from "@nestjs/common";
-import { SourceFetcherService } from "./source-fetcher.service";
+import { ActualSyncService } from "../actual-sync/actual-sync.service";
 
 @Injectable()
 export class JobsService {
-  constructor(private readonly fetcher: SourceFetcherService) {}
+  constructor(private readonly actualSync: ActualSyncService) {}
 
   runFetchAll() {
-    return this.fetcher.fetchAll();
+    return this.actualSync.syncAllActiveAccounts();
   }
 
-  runFetchUserSource(userSourceId: string) {
-    return this.fetcher.fetchUserSource(userSourceId);
+  runFetchUserSource(actualAccountId: string) {
+    return this.actualSync.syncAccountById(actualAccountId);
   }
 }

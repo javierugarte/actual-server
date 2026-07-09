@@ -11,9 +11,9 @@ export class JobsController {
   constructor(private readonly jobs: JobsService) {}
 
   @Post("run-now")
-  runNow(@Body() body: { userSourceId?: string }) {
-    if (body.userSourceId) {
-      return this.jobs.runFetchUserSource(body.userSourceId);
+  runNow(@Body() body: { actualAccountId?: string }) {
+    if (body.actualAccountId) {
+      return this.jobs.runFetchUserSource(body.actualAccountId);
     }
     return this.jobs.runFetchAll();
   }
