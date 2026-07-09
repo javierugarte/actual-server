@@ -6,7 +6,7 @@ import { JobsSchedulerService } from "./jobs/scheduler.service";
 async function bootstrap() {
   const app = await NestFactory.createApplicationContext(AppModule);
   app.enableShutdownHooks();
-  await app.get(JobsSchedulerService).start();
+  app.get(JobsSchedulerService).start();
   new Logger("Scheduler").log("Scheduler registered");
 }
 

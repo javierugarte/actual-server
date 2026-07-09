@@ -1,17 +1,15 @@
-import { Inject, Injectable } from "@nestjs/common";
-import { Queue } from "bullmq";
-import { FETCH_QUEUE_PROVIDER } from "./queue.provider";
-import { FetchJobName } from "./queue.constants";
+import { Injectable } from "@nestjs/common";
+import { SourceFetcherService } from "./source-fetcher.service";
 
 @Injectable()
 export class JobsService {
-  constructor(@Inject(FETCH_QUEUE_PROVIDER) private readonly queue: Queue) {}
+  constructor(private readonly fetcher: SourceFetcherService) {}
 
-  enqueueFetchAll() {
-    return this.queue.add(FetchJobName.FetchAll, {}, { jobId: `fetch-all-${Date.now()}` });
+  runFetchAll() {
+    return this.fetcher.fetchAll();
   }
 
-  enqueueFetchUserSource(userSourceId: string) {
-    return this.queue.add(FetchJobName.FetchUserSource, { userSourceId }, { jobId: `fetch-user-source-${userSourceId}-${Date.now()}` });
+  runFetchUserSource(userSourceId: string) {
+    return this.fetcher.fetchUserSource(userSourceId);
   }
 }

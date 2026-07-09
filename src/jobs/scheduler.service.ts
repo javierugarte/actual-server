@@ -1,32 +1,43 @@
-import { Inject, Injectable, Logger } from "@nestjs/common";
+import { Injectable, Logger, OnModuleDestroy } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { Queue } from "bullmq";
-import { FETCH_QUEUE_PROVIDER } from "./queue.provider";
-import { FetchJobName } from "./queue.constants";
+import cron, { ScheduledTask } from "node-cron";
+import { SourceFetcherService } from "./source-fetcher.service";
 
 @Injectable()
-export class JobsSchedulerService {
+export class JobsSchedulerService implements OnModuleDestroy {
   private readonly logger = new Logger(JobsSchedulerService.name);
+  private task?: ScheduledTask;
 
   constructor(
-    @Inject(FETCH_QUEUE_PROVIDER) private readonly queue: Queue,
+    private readonly fetcher: SourceFetcherService,
     private readonly config: ConfigService
   ) {}
 
-  async start() {
+  start() {
     const pattern = this.config.get<string>("FETCH_CRON", "0 8 * * *");
     const tz = this.config.get<string>("FETCH_TIMEZONE", "Europe/Madrid");
 
-    await this.queue.upsertJobScheduler(
-      "daily-source-fetch",
-      { pattern, tz },
-      {
-        name: FetchJobName.FetchAll,
-        data: {},
-        opts: { attempts: 3 }
-      }
+    if (this.task) {
+      return;
+    }
+
+    this.task = cron.schedule(
+      pattern,
+      async () => {
+        try {
+          await this.fetcher.fetchAll();
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Unknown scheduler error";
+          this.logger.error(`Scheduled fetch failed: ${message}`);
+        }
+      },
+      { timezone: tz }
     );
 
-    this.logger.log(`Scheduled ${FetchJobName.FetchAll} with cron "${pattern}" (${tz})`);
+    this.logger.log(`Scheduled source fetch with cron "${pattern}" (${tz})`);
+  }
+
+  onModuleDestroy() {
+    this.task?.stop();
   }
 }

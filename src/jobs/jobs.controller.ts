@@ -13,8 +13,8 @@ export class JobsController {
   @Post("run-now")
   runNow(@Body() body: { userSourceId?: string }) {
     if (body.userSourceId) {
-      return this.jobs.enqueueFetchUserSource(body.userSourceId);
+      return this.jobs.runFetchUserSource(body.userSourceId);
     }
-    return this.jobs.enqueueFetchAll();
+    return this.jobs.runFetchAll();
   }
 }

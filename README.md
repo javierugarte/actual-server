@@ -6,7 +6,7 @@ Backend API-first para registrar usuarios, asociar tokens APNs de iOS, consultar
 
 - NestJS + TypeScript
 - SQLite local con `better-sqlite3`
-- Redis + BullMQ para cola y scheduler
+- Scheduler local con `node-cron`
 - APNs HTTP/2 vía `@parse/node-apn`
 
 ## Arranque local
@@ -14,15 +14,13 @@ Backend API-first para registrar usuarios, asociar tokens APNs de iOS, consultar
 ```bash
 npm install
 cp .env.example .env
-docker compose up -d
 npm run db:setup
 npm run start:dev
 ```
 
-En otras terminales:
+En otra terminal:
 
 ```bash
-npm run dev:worker
 npm run dev:scheduler
 ```
 
@@ -31,7 +29,7 @@ API docs: `http://localhost:3000/docs`
 ## Persistencia y cola
 
 - SQLite guarda usuarios, tokens de dispositivos, fuentes, items vistos, ejecuciones y notificaciones. Por defecto usa `SQLITE_PATH=./data/actual-server.db`.
-- Redis no guarda datos de negocio. Se usa para BullMQ: cola de trabajos, reintentos y job scheduler diario.
+- El scheduler se ejecuta en proceso con `node-cron`; no requiere servicios locales adicionales.
 - `npm run db:setup` es idempotente: aplica [db/schema.sql](./db/schema.sql) con `CREATE TABLE IF NOT EXISTS`.
 
 ## Flujo básico
@@ -40,11 +38,11 @@ API docs: `http://localhost:3000/docs`
 2. `POST /devices` con el token APNs que entrega iOS
 3. `POST /sources` para asociar una URL al usuario
 4. El scheduler crea un job diario según `FETCH_CRON`
-5. El worker llama por `POST` a `DATA_SERVICE_URL`, detecta items nuevos y envía push si `PUSH_DRY_RUN=false`
+5. El proceso de scheduler llama por `POST` a `DATA_SERVICE_URL`, detecta items nuevos y envía push si `PUSH_DRY_RUN=false`
 
 ## Servicio externo
 
-El worker no llama directamente a la URL de cada fuente. Llama a un único servicio configurado por entorno:
+El proceso de scheduler no llama directamente a la URL de cada fuente. Llama a un único servicio configurado por entorno:
 
 ```env
 DATA_SERVICE_URL=https://api.example.com/updates
